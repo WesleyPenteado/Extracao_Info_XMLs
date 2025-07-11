@@ -1,4 +1,4 @@
-Sub ExtrairDadosXML()
+Sub ExtrairDadosXML() 
 
     Dim pasta As String, arquivo As String, linha As Long
     Dim xmlDoc As Object, root As Object
