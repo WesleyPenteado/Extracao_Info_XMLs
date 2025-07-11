@@ -1,0 +1,268 @@
+Sub ExtrairDadosXML()
+
+    Dim pasta As String, arquivo As String, linha As Long
+    Dim xmlDoc As Object, root As Object
+    Dim ws As Worksheet
+    Dim ns As Object
+    Dim emit As Object, ide As Object, det As Object
+    Dim total As Object, icms As Object, ipi As Object
+    Dim pis As Object, cofins As Object
+    Dim node As Object
+
+    
+    'Configurações iniciais
+    Set ws = ThisWorkbook.Sheets("Sheet1")
+    pasta = Trim(ws.Range("K3").Value)
+    If Right(pasta, 1) <> "\" Then pasta = pasta & "\" 'Garante que o final termina em \
+
+    'Verifica se a pasta existe se não retorna erro
+    If Dir(pasta, vbDirectory) = "" Then
+        MsgBox "? Pasta inválida.", vbCritical
+        Exit Sub
+    End If
+
+    linha = 7 ' Começa a preencher a partir da linha 7
+    arquivo = Dir(pasta & "*.xml") 'lista o primeiro arquivo
+
+    'Loop para cada arquivo xml na pasta
+    Do While arquivo <> ""
+        Set xmlDoc = CreateObject("MSXML2.DOMDocument.6.0")
+        xmlDoc.async = False
+        xmlDoc.Load (pasta & arquivo)
+
+        If xmlDoc.ParseError.ErrorCode = 0 Then
+
+            Set ide = xmlDoc.SelectSingleNode("//*[local-name()='ide']")
+            Set det = xmlDoc.SelectSingleNode("//*[local-name()='det']")
+            Set total = xmlDoc.SelectSingleNode("//*[local-name()='ICMSTot']")
+            Set pis = xmlDoc.SelectSingleNode("//*[local-name()='PIS']/*[local-name()='PISAliq']")
+            Set cofins = xmlDoc.SelectSingleNode("//*[local-name()='COFINS']/*[local-name()='COFINSAliq']")
+            Set ipi = xmlDoc.SelectSingleNode("//*[local-name()='IPI']/*[local-name()='IPITrib']")
+            Set icms = xmlDoc.SelectSingleNode("//*[local-name()='ICMS']/*")
+            
+            Set cnpjNode = xmlDoc.SelectSingleNode("//*[local-name()='emit']/*[local-name()='CNPJ']")
+            Set nomeNode = xmlDoc.SelectSingleNode("//*[local-name()='emit']/*[local-name()='xNome']")
+            Set ufNode = xmlDoc.SelectSingleNode("//*[local-name()='enderEmit']/*[local-name()='UF']")
+            Set munNode = xmlDoc.SelectSingleNode("//*[local-name()='enderEmit']/*[local-name()='xMun']")
+            Set logradouro = xmlDoc.SelectSingleNode("//*[local-name()='enderEmit']/*[local-name()='xLgr']")
+            Set numero = xmlDoc.SelectSingleNode("//*[local-name()='enderEmit']/*[local-name()='nro']")
+            Set bairro = xmlDoc.SelectSingleNode("//*[local-name()='enderEmit']/*[local-name()='xBairro']")
+
+            enderecoCompleto = ""
+            If Not logradouro Is Nothing Then enderecoCompleto = logradouro.Text
+            If Not numero Is Nothing Then enderecoCompleto = enderecoCompleto & ", " & numero.Text
+            If Not bairro Is Nothing Then enderecoCompleto = enderecoCompleto & " - " & bairro.Text
+            
+            
+            ' CPFouCNPJ / Razão Social / UF / Município / Endereço
+            If Not cnpjNode Is Nothing Then ws.Cells(linha, 1).Value = FormatCNPJ(cnpjNode.Text)
+            If Not nomeNode Is Nothing Then ws.Cells(linha, 2).Value = nomeNode.Text
+            If Not ufNode Is Nothing Then ws.Cells(linha, 3).Value = ufNode.Text
+            If Not munNode Is Nothing Then ws.Cells(linha, 4).Value = munNode.Text
+            If enderecoCompleto <> "" Then ws.Cells(linha, 5).Value = enderecoCompleto
+                      
+
+            ' Número Documento / Série / Data de emissão
+            If Not ide Is Nothing Then
+                Set node = ide.SelectSingleNode("*[local-name()='nNF']")
+                If Not node Is Nothing Then ws.Cells(linha, 6).Value = node.Text
+                
+                Set node = ide.SelectSingleNode("*[local-name()='serie']")
+                If Not node Is Nothing Then ws.Cells(linha, 7).Value = node.Text
+                
+                ' Primeiro tenta dEmi
+                Set node = ide.SelectSingleNode("*[local-name()='dEmi']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 8).Value = node.Text
+                Else
+                    ' Se dEmi não existe, tenta dhEmi
+                    Set node = ide.SelectSingleNode("*[local-name()='dhEmi']")
+                    If Not node Is Nothing Then
+                        ws.Cells(linha, 8).Value = FormatarDataISO(node.Text)
+                    Else
+                        ' Se nenhum existe, pode deixar vazio ou colocar um valor padrão
+                        ws.Cells(linha, 8).Value = ""
+                    End If
+                End If
+            End If
+
+            ' Situação (assumimos 0 - Regular)
+            ws.Cells(linha, 9).Value = ""
+            ' Acumulador (deixar vazio ou preenchido manualmente)
+            ws.Cells(linha, 10).Value = ""
+
+            If Not det Is Nothing Then
+                Set node = det.SelectSingleNode(".//*[local-name()='CFOP']")
+                If Not node Is Nothing Then ws.Cells(linha, 11).Value = node.Text
+                
+                Set node = det.SelectSingleNode(".//*[local-name()='cProd']")
+                If Not node Is Nothing Then ws.Cells(linha, 25).Value = node.Text
+                
+                Set node = det.SelectSingleNode(".//*[local-name()='qCom']")
+                If Not node Is Nothing Then ws.Cells(linha, 26).Value = node.Text
+                
+                Set node = det.SelectSingleNode(".//*[local-name()='vUnCom']")
+                If Not node Is Nothing Then ws.Cells(linha, 27).Value = node.Text
+            End If
+
+            If Not total Is Nothing Then
+                Set node = total.SelectSingleNode("*[local-name()='vProd']")
+                If Not node Is Nothing Then ws.Cells(linha, 12).Value = node.Text
+                
+                Set node = total.SelectSingleNode("*[local-name()='vDesc']")
+                If Not node Is Nothing Then ws.Cells(linha, 13).Value = node.Text
+                
+                Set node = total.SelectSingleNode("*[local-name()='vNF']")
+                If Not node Is Nothing Then ws.Cells(linha, 14).Value = node.Text
+                
+                Set node = total.SelectSingleNode("*[local-name()='vBC']")
+                If Not node Is Nothing Then ws.Cells(linha, 15).Value = node.Text
+                
+                Set node = total.SelectSingleNode("*[local-name()='vOutro']")
+                If Not node Is Nothing Then ws.Cells(linha, 18).Value = node.Text
+            End If
+
+            If Not icms Is Nothing Then
+                Set node = icms.SelectSingleNode("*[local-name()='pICMS']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 16).Value = node.Text
+                Else
+                    ws.Cells(linha, 16).Value = 0
+                End If
+                
+                Set node = icms.SelectSingleNode("*[local-name()='vICMS']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 17).Value = node.Text
+                Else
+                    ws.Cells(linha, 17).Value = 0
+                End If
+            Else
+                 ws.Cells(linha, 16).Value = 0
+                 ws.Cells(linha, 17).Value = 0
+            End If
+
+            ' Isentas ICMS – (não informadas diretamente, pode deixar em branco ou calcular depois)
+            ws.Cells(linha, 19).Value = ""
+
+            If Not ipi Is Nothing Then
+                Set node = ipi.SelectSingleNode("*[local-name()='vBC']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 20).Value = CDbl(node.Text)
+                Else
+                    ws.Cells(linha, 20).Value = 0
+                End If
+            
+                Set node = ipi.SelectSingleNode("*[local-name()='pIPI']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 21).Value = CDbl(node.Text)
+                Else
+                    ws.Cells(linha, 21).Value = 0
+                End If
+            
+                Set node = ipi.SelectSingleNode("*[local-name()='vIPI']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 22).Value = CDbl(node.Text)
+                Else
+                    ws.Cells(linha, 22).Value = 0
+                End If
+            Else
+                ' Caso o nó ipi não exista, preenche com zero
+                ws.Cells(linha, 20).Value = 0
+                ws.Cells(linha, 21).Value = 0
+                ws.Cells(linha, 22).Value = 0
+            End If
+
+            ' Outras IPI / Isentas – (pode deixar em branco)
+            ws.Cells(linha, 23).Value = "0"
+            ws.Cells(linha, 24).Value = "0"
+
+            If Not pis Is Nothing Then
+                Set node = pis.SelectSingleNode("*[local-name()='CST']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 28).Value = node.Text
+                Else
+                    ws.Cells(linha, 28).Value = "0"
+                End If
+            
+                Set node = pis.SelectSingleNode("*[local-name()='vBC']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 29).Value = node.Text
+                Else
+                    ws.Cells(linha, 29).Value = "0"
+                End If
+            
+                Set node = pis.SelectSingleNode("*[local-name()='pPIS']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 30).Value = node.Text
+                Else
+                    ws.Cells(linha, 30).Value = "0"
+                End If
+            
+                Set node = pis.SelectSingleNode("*[local-name()='vPIS']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 31).Value = node.Text
+                Else
+                    ws.Cells(linha, 31).Value = "0"
+                End If
+                Else
+                    ws.Cells(linha, 28).Value = "0"
+                    ws.Cells(linha, 29).Value = "0"
+                    ws.Cells(linha, 30).Value = "0"
+                    ws.Cells(linha, 31).Value = "0"
+            End If
+            
+            If Not cofins Is Nothing Then
+                Set node = cofins.SelectSingleNode("*[local-name()='pCOFINS']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 32).Value = node.Text
+                Else
+                    ws.Cells(linha, 32).Value = "0"
+                End If
+            
+                Set node = cofins.SelectSingleNode("*[local-name()='vCOFINS']")
+                If Not node Is Nothing Then
+                    ws.Cells(linha, 33).Value = node.Text
+                Else
+                    ws.Cells(linha, 33).Value = "0"
+                End If
+            Else
+                ws.Cells(linha, 32).Value = "0"
+                ws.Cells(linha, 33).Value = "0"
+            End If
+
+        linha = linha + 1
+
+        Else
+            MsgBox "Erro ao ler o XML: " & arquivo
+        End If
+
+        arquivo = Dir
+    Loop
+
+    MsgBox "Extração concluída!"
+
+End Sub
+
+' Função para formatar CNPJ
+Function FormatCNPJ(cnpj As String) As String
+    If Len(cnpj) = 14 Then
+        FormatCNPJ = Left(cnpj, 2) & "." & Mid(cnpj, 3, 3) & "." & Mid(cnpj, 6, 3) & "/" & Mid(cnpj, 9, 4) & "-" & Right(cnpj, 2)
+    Else
+        FormatCNPJ = cnpj
+    End If
+End Function
+
+' Função para formatar a data quando conter data + hora em formato americano
+Function FormatarDataISO(dataISO As String) As String
+    Dim dataSomente As String
+    Dim dt As Date
+    
+    ' Extrai só a parte antes do "T"
+    dataSomente = Split(dataISO, "T")(0)
+    
+    ' Converte para data
+    dt = DateValue(dataSomente)
+    
+    ' Retorna formatada em dd/mm/yyyy
+    FormatarDataISO = Format(dt, "mm/dd/yyyy")
+End Function
